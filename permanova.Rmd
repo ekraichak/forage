@@ -1,0 +1,137 @@
+---
+title: "PERMANOVA on understory plant data"
+author: "Ekaphan Kraichak"
+date: '2022-11-01'
+output: github_document
+---
+
+## load the libraries
+
+```{r}
+library(tidyverse)
+library(vegan)
+```
+
+## import data
+
+```{r}
+env <- read.csv("Environmental_matrix.csv")
+comm <- read.csv("UnderGrowth_matrix.csv")
+```
+
+## combine env and comm to select only the plot that experience fire to make sure that they are in the same order. Filter only the plot with fire
+```{r}
+comm.env <- env %>% 
+  select(Plot, Fire, Fire.appear, forest.type) %>%
+  mutate(forest.type = recode(forest.type, "MDF,bamboo" = "MDFB", "OpenArea" = "OA")) %>% 
+  inner_join(comm, by = c("Plot", "Fire")) %>% 
+  filter(Fire.appear == "Fire") %>% 
+  filter(!(Plot %in% c(123, 124, 115))) ## these plots are OA and way outliers. Plot 115 is also acting weird
+
+comm.env.E0 <- comm.env[,1:4] ## environmental matrix
+comm.env.C0 <- comm.env[,5:484] 
+```
+
+after all the filtering, some species disappear from the matrix. We will select only species that occur in more than 20 plots (remove rare species)
+
+```{r}
+main.species <- names(which(colSums(comm.env.C0 > 0) > 20))
+
+
+comm.env.C1 <- comm.env.C0[,main.species]
+## find not empty row
+not.empty <- which(rowSums(comm.env.C1) > 0)
+
+comm.env.C <- wisconsin(comm.env.C1[not.empty, main.species])
+## community matrix with Wisconsin double standardization
+comm.env.E <- comm.env.E0[not.empty, ]
+
+```
+
+
+## run PERMANOVA using adonis
+
+```{r}
+perm <- how(nperm = 1999)
+setBlocks(perm) <- with(comm.env.E, forest.type)
+adonis2(comm.env.C ~ Fire*forest.type, data = comm.env.E, permutations = perm)
+```
+
+```{r}
+xx <- betadisper(vegdist(comm.env.C), comm.env.E$Fire)
+anova(xx)
+```
+
+## visualize the data
+
+```{r, fig.height=5, fig.width=8}
+mod <- metaMDS(comm.env.C)
+
+mod_scores <- scores(mod)
+
+## without hull
+mod_score_env <- cbind(comm.env.E, mod_scores) %>% 
+  mutate(forest = paste(forest.type, Fire, sep = " ")) %>% 
+  mutate(forest = factor(forest, levels = c("DDF before", "DDF after", "MDF before", "MDF after", "MDFB before", "MDFB after"))) %>% 
+  mutate(Fire = factor(Fire, levels = c("before","after")))
+
+## with hull
+mod_score_hull <- mod_score_env %>% 
+  group_by(Fire, forest.type) %>% 
+  slice(chull(NMDS1, NMDS2)) ## create convex hull by groups
+
+p1 <- ggplot() +
+  geom_point(aes(x = NMDS1, y = NMDS2, col = forest), data = mod_score_env) +
+  geom_polygon(aes(x = NMDS1, y = NMDS2, fill = forest, color = forest), data = mod_score_hull, alpha = 0.3) +
+  scale_fill_brewer(palette = "Paired") +
+  scale_color_brewer(palette = "Paired")
+
+p1
+```
+
+Just fire
+
+```{r}
+mod_score_hull2 <- mod_score_env %>% 
+  group_by(Fire) %>% 
+  slice(chull(NMDS1, NMDS2))
+
+ggplot() +
+  geom_point(aes(x = NMDS1, y = NMDS2, col = Fire), data = mod_score_env) +
+  geom_polygon(aes(x = NMDS1, y = NMDS2, fill = Fire, color = Fire), data = mod_score_hull2, alpha = 0.3)
+```
+
+
+## facet by forest types and fire
+
+```{r, , fig.height=5, fig.width=10}
+p1 +
+  facet_grid(~ forest.type)
+```
+
+
+```{r, , fig.height=5, fig.width=10}
+p1 +
+  facet_grid(~ Fire)
+```
+
+
+## simper analysis
+
+```{r}
+ss <- simper(comm.env.C, comm.env.E$Fire, permutations = 99)
+summary(ss)
+```
+
+make new data.frame from the results
+```{r}
+ss_df <- data.frame(species = ss$before_after$species,
+                    contribution = round(ss$before_after$average,3),
+                    abun_before = round(ss$before_after$ava,3), 
+                    abun_after = round(ss$before_after$avb,3),
+                    p_value = ss$before_after$p)
+
+ss_df %>% 
+  filter(p_value <= 0.05)
+```
+
