@@ -19,7 +19,10 @@ env <- read.csv("Environmental_matrix.csv")
 comm <- read.csv("UnderGrowth_matrix.csv")
 ```
 
-## combine env and comm to select only the plot that experience fire to make sure that they are in the same order. Filter only the plot with fire
+## clean data 
+
+combine env and comm to select only the plot that experience fire to make sure that they are in the same order. Filter only the plot with fire
+
 ```{r}
 comm.env <- env %>% 
   select(Plot, Fire, Fire.appear, forest.type) %>%
@@ -57,15 +60,11 @@ setBlocks(perm) <- with(comm.env.E, forest.type)
 adonis2(comm.env.C ~ Fire*forest.type, data = comm.env.E, permutations = perm)
 ```
 
-```{r}
-xx <- betadisper(vegdist(comm.env.C), comm.env.E$Fire)
-anova(xx)
-```
 
-## visualize the data
+## visualize the data via MDS
 
 ```{r, fig.height=5, fig.width=8}
-mod <- metaMDS(comm.env.C)
+mod <- metaMDS(comm.env.C, trymax = 100)
 
 mod_scores <- scores(mod)
 
@@ -89,7 +88,19 @@ p1 <- ggplot() +
 p1
 ```
 
-Just fire
+## facet by forest types and fire
+
+```{r, , fig.height=5, fig.width=10}
+p1 +
+  facet_grid(~ Fire)
+```
+
+Just the effect of fire
+
+```{r}
+adonis2(comm.env.C ~ Fire, data = comm.env.E, permutations = perm)
+```
+
 
 ```{r}
 mod_score_hull2 <- mod_score_env %>% 
@@ -102,18 +113,39 @@ ggplot() +
 ```
 
 
-## facet by forest types and fire
+## PERMANOVA by forest types
+
+```{r}
+comm.env2 <- cbind(comm.env.E, comm.env.C)
+
+ado_type <- function(TYPE){
+  temp.df <- filter(comm.env2, forest.type == TYPE)
+  adonis2(temp.df[,5:67] ~ Fire, data = temp.df)
+}
+```
+
+
+DDF
+```{r}
+ado_type("DDF")
+```
+
+DDF
+```{r}
+ado_type("MDF")
+```
+
+DDF
+```{r}
+ado_type("MDFB")
+```
+
 
 ```{r, , fig.height=5, fig.width=10}
 p1 +
   facet_grid(~ forest.type)
 ```
 
-
-```{r, , fig.height=5, fig.width=10}
-p1 +
-  facet_grid(~ Fire)
-```
 
 
 ## simper analysis
