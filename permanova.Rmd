@@ -55,7 +55,7 @@ comm.env.E <- comm.env.E0[not.empty, ]
 ## run PERMANOVA using adonis
 
 ```{r}
-perm <- how(nperm = 1999)
+perm <- how(nperm = 9999)
 setBlocks(perm) <- with(comm.env.E, forest.type)
 adonis2(comm.env.C ~ Fire*forest.type, data = comm.env.E, permutations = perm)
 ```
@@ -64,9 +64,9 @@ adonis2(comm.env.C ~ Fire*forest.type, data = comm.env.E, permutations = perm)
 ## visualize the data via MDS
 
 ```{r, fig.height=5, fig.width=8}
-mod <- metaMDS(comm.env.C, trymax = 100)
+mod <- metaMDS(comm.env.C, trymax = 3000, k = 3)
 
-mod_scores <- scores(mod)
+mod_scores <- scores(mod, display = "sites")
 
 ## without hull
 mod_score_env <- cbind(comm.env.E, mod_scores) %>% 
@@ -143,7 +143,8 @@ ado_type("MDFB")
 
 ```{r, , fig.height=5, fig.width=10}
 p1 +
-  facet_grid(~ forest.type)
+  facet_grid(~ forest.type) +
+  theme_bw(base_family = "serif")
 ```
 
 
@@ -166,4 +167,5 @@ ss_df <- data.frame(species = ss$before_after$species,
 ss_df %>% 
   filter(p_value <= 0.05)
 ```
+
 
